@@ -141,7 +141,8 @@ class Drone:
             sys.exit(1)
 
         #subscriber for the optitrack system
-        rospy.Subscriber(f'/mocap_node/{self.name}/Odom', Odometry, self.callback)
+        if self.callback != None:
+            rospy.Subscriber(f'/mocap_node/{self.name}/Odom', Odometry, self.callback)
 
         #create publishers for drone type
         if (type == 'bebop1' or 'bebop2'):
@@ -185,9 +186,17 @@ class Drone:
 
     #function to update drone velocities in accordance with a given position and its controller
     # account for necessary rotations if desired
-    def update_vel(self, pos:list, rotPosVels:bool = True, euler:bool = True, rotAxis:str = 'yaw', verbose = False):
+    def update_vel(self, pos:list, rotPosVels:bool = True, euler:bool = True, rotAxis:str = 'yaw', verbose = False, raw_vels = None):
         #vels order is [x, y, z, yaw, pitch, roll]
-        vels = self.controller.get_out(pos)
+        if raw_vels != None:
+            if (len(raw_vels) != (self.controller.numPosAxis + self.controller.numRotAxis)):
+                print("'values' parameter formatted incorrectly", file=sys.stderr)
+                sys.exit(1)
+
+            vels = raw_vels
+
+        else:
+            vels = self.controller.get_out(pos)
 
         if rotPosVels:
             if (self.controller.numRotAxis == 0):
