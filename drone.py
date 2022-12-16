@@ -302,6 +302,19 @@ class Drone:
         return True
 
 
+    def takeoff_drones(drones:list):
+        for d in drones:
+            d.takeoff()
+
+
+    def stop_and_land_drones(drones:list):
+        for d in drones:
+            d.stop_movement()
+
+        for d in drones:
+            d.land()
+
+
 
 
     
