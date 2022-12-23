@@ -11,8 +11,7 @@ import sys
 from nav_msgs.msg import Odometry
 
 import numpy as np
-import socket
-import threading
+from threading import Thread
 
 import keyboard
 
@@ -38,12 +37,17 @@ class OrbDrone(Drone):
         self.yAcc = 0
         self.mass = mass
 
-    def update_vel(self, pos: list, rotPosVels: bool = True, euler: bool = True, rotAxis: str = 'yaw', verbose=False, raw_vels=None):
-        return super().update_vel(pos, rotPosVels, euler, rotAxis, verbose, raw_vels=[self.xVel, self.yVel])
+        self.lastTime = time.time()
+
+    def update_vel(self, pos: list, rotPosVels: bool = True, verbose=False):
+        return super().update_vel(pos, rotPosVels, verbose=verbose, raw_vels=[self.xVel, self.yVel, 0])
 
     def apply_acc(self):
-        self.xVel += self.xAcc
-        self.yVel += self.yAcc
+        curr = time.time()
+        self.xVel += self.xAcc * (curr - self.lastTime)
+        self.yVel += self.yAcc * (curr - self.lastTime)
+
+        self.lastTime = curr
 
     def change_acc(self, forces:list):
         totX = 0
@@ -67,16 +71,25 @@ class OrbDrone(Drone):
 
         return [d*const for d in diff]
 
-    def update_acc(self, pos, applF):
+    def follow_orbit(self, pos, applF = [0, 0], verbose = False):
         self.change_acc([applF, self.acc_to_point(pos)])
+        #self.apply_acc()
+        self.update_vel(pos) 
+
+        if verbose:
+            print("---------------------")
+            print(f"xAcc:{self.xAcc} -- yAcc:{self.yAcc}")
+            print(f"xVel:{self.xVel} -- yVel:{self.yVel}")
 
     
+    def reset_time(self):
+        self.lastTime = time.time()
 
 
 
 
 
-d1Pos = [0, 0, 0]
+d1Pos = [0.001, 0.001, 0.001]
 d2Pos = [0, 0, 0]
 
 rospy.init_node('myNode', anonymous=True)
@@ -92,8 +105,8 @@ def drone_1_callback(msg, drone, procedureRun):
     yaw_rad = euler[2] - (math.pi/2)
     if (yaw_rad < -(math.pi)):
         yaw_rad += (2 * math.pi)
-    
-    mPos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, yaw_rad]
+
+    d1Pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, yaw_rad]
 
 
 def drone_2_callback(msg, drone, procedureRun):
@@ -107,9 +120,14 @@ def drone_2_callback(msg, drone, procedureRun):
     if (yaw_rad < -(math.pi)):
         yaw_rad += (2 * math.pi)
     
-    mPos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, yaw_rad]
+    d2Pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, yaw_rad]
 
     
+
+def emergency_stop():
+    input()
+
+    Drone.procedureRun = False
 
 
 
@@ -121,16 +139,18 @@ contParams = [
     ]
 
 
-d1 = OrbDrone('bebop_01', 'bebop1', Controller('PID', 2, 1, contParams), drone_1_callback, xVel=0, yVel=0, mass=1)
-d2 = OrbDrone('bebop_02', 'bebop1', Controller('PID', 2, 1, contParams), drone_2_callback, xVel=0, yVel=0, mass=1)
+d1 = OrbDrone('bebop_02', 'bebop1', Controller('PID', 2, 1, contParams), drone_1_callback, xVel=0, yVel=-0.5, mass=1)
+d2 = OrbDrone('bebop_01', 'bebop1', Controller('PID', 2, 1, contParams), drone_2_callback, xVel=0, yVel=0, mass=1)
 myDrones = [d1, d2]
-timePerStep = 0.01
+timePerStep = 0.005
 
-orbitedPoint = [0, 0]
-pointMass = 1
+OrbDrone.orbPoint = [0, 0]
+OrbDrone.pointMass = 0.02
 
 
 def main():
+
+    
 
     myIn = input("'t' to takeoff: ")
 
@@ -151,14 +171,6 @@ def main():
     time.sleep(1)
 
 
-    forces = [[0, 0], [0, 0]]
-
-    while (Drone.procedureRun):
-        for d in myDrones:
-           pass 
-
-        time.sleep(timePerStep)
-
 
     if (myIn != 's'):
         Drone.stop_and_land_drones(myDrones)
@@ -169,16 +181,30 @@ def main():
 
     print('procedure start')
 
-    Drone.procedureRun = True
     
+
+    Drone.procedureRun = True
+
+    thread = Thread(target=emergency_stop)
+    thread.start()
+
+
+    forces = [[0, 0], [0, 0]]
+
+    d1.reset_time()
+    while (Drone.procedureRun):
+        d1.follow_orbit(d1Pos, verbose=True)
+
+        time.sleep(timePerStep)    
     
 
 
     print('procedure finished')
     Drone.stop_and_land_drones(myDrones)
-    #time.sleep(2)
 
     print('landing')
+
+    time.sleep(2)
 
 
     '''

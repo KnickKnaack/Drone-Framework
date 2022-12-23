@@ -190,7 +190,7 @@ class Drone:
         #vels order is [x, y, z, yaw, pitch, roll]
         if raw_vels != None:
             if (len(raw_vels) != (self.controller.numPosAxis + self.controller.numRotAxis)):
-                print("'values' parameter formatted incorrectly", file=sys.stderr)
+                print("'raw_vels' parameter formatted incorrectly", file=sys.stderr)
                 sys.exit(1)
 
             vels = raw_vels
