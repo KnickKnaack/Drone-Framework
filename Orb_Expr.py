@@ -23,6 +23,7 @@ class OrbDrone(Drone):
 
     orbPoint = [0, 0]
     pointMass = 1
+    distMult = 1
 
 
     def __init__(self, name: str, type: str, controller: Controller, callback, xVel = 0, yVel = 0, mass = 1, bounds=None):
@@ -63,7 +64,7 @@ class OrbDrone(Drone):
     def acc_to_point(self, pos):
         diff = [self.orbPoint[0] - pos[0], self.orbPoint[1] - pos[1]]
 
-        dist = math.sqrt(diff[0]**2 + diff[1]**2)
+        dist = math.sqrt(diff[0]**2 + diff[1]**2) * self.distMult
 
         f = (self.pointMass * self.mass) / (dist**2)
 
@@ -74,10 +75,10 @@ class OrbDrone(Drone):
     def follow_orbit(self, pos, applF = [0, 0], verbose = False):
         self.change_acc([applF, self.acc_to_point(pos)])
         #self.apply_acc()
-        self.update_vel(pos) 
+        self.update_vel(pos, verbose=verbose) 
 
         if verbose:
-            print("---------------------")
+            print("----------*-----------")
             print(f"xAcc:{self.xAcc} -- yAcc:{self.yAcc}")
             print(f"xVel:{self.xVel} -- yVel:{self.yVel}")
 
@@ -139,18 +140,20 @@ contParams = [
     ]
 
 
-d1 = OrbDrone('bebop_02', 'bebop1', Controller('PID', 2, 1, contParams), drone_1_callback, xVel=0, yVel=-0.5, mass=1)
-d2 = OrbDrone('bebop_01', 'bebop1', Controller('PID', 2, 1, contParams), drone_2_callback, xVel=0, yVel=0, mass=1)
-myDrones = [d1, d2]
+d1 = OrbDrone('bebop_03', 'bebop1', Controller('PID', 2, 1, contParams), drone_1_callback, xVel=0, yVel=-0.5, mass=1)
+#d2 = OrbDrone('bebop_01', 'bebop1', Controller('PID', 2, 1, contParams), drone_2_callback, xVel=0, yVel=0, mass=1)
+myDrones = [d1]#, d2]
 timePerStep = 0.005
 
 OrbDrone.orbPoint = [0, 0]
-OrbDrone.pointMass = 0.02
+OrbDrone.pointMass = 0.05
+OrbDrone.distMult = 0.5
 
 
 def main():
-
+    global d1
     
+    time.sleep(2)
 
     myIn = input("'t' to takeoff: ")
 
@@ -160,6 +163,8 @@ def main():
         exit(1)
 
     Drone.takeoff_drones(myDrones)
+
+    #d1.takeoff()
 
     print('takeoff')
 
