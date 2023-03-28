@@ -20,7 +20,8 @@ def callback(msg, drone, procedureRun):
         yaw_rad += (2 * math.pi)
     
     pos = [msg.pose.pose.position.x, msg.pose.pose.position.y, yaw_rad]
-    
+
+    #print(pos)
 
     if procedureRun:
         drone.update_vel(pos, verbose = True, rotPosVels = True)
@@ -36,7 +37,7 @@ def main():
     	[1, 0, 0]
     ]
 
-    myDrone = Drone('bebop_01', 'bebop1', Controller('PID', 2, 1, contParams), callback)
+    myDrone = Drone('bebop_03', 'bebop1', Controller('PID', 2, 1, contParams), callback)
     
     
     #wait after creating drones to make sure all ros components are ready

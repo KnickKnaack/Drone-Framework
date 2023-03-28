@@ -127,7 +127,7 @@ class Drone:
     procedureRun = False
 
 
-    def  __init__(self, name:str, type:str, controller:Controller, callback, bounds = None):
+    def  __init__(self, name:str, type:str, controller:Controller == None, callback, bounds = None):
         self.name = name
         self.type = type
         self.controller = controller
@@ -152,6 +152,16 @@ class Drone:
             self.landPub = rospy.Publisher(f'/{self.name}/land', Empty, queue_size=5)
             #takeoff Publisher
             self.takeoffPub = rospy.Publisher(f'/{self.name}/takeoff', Empty, queue_size=5)
+
+            if self.controller == None:
+                self.controller = Controller('PID', 3, 1, 
+                                                    [[0.35, 0.006, 0.4],
+    	                                            [0.35, 0.006, 0.4],
+                                                    [0.6, 0.003, 0.2],
+                                                    [1, 0, 0]]
+                                            )
+
+
         elif (type == 'wand'):
             pass
         else:
