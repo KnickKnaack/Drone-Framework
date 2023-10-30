@@ -1,6 +1,10 @@
 import sys
 import math
 
+from pyparrot.Bebop import Bebop
+
+from djitellopy import Tello
+
 import rospy
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Empty
@@ -125,15 +129,18 @@ class Drone:
     'basic class that defines a drones controller and callback function for ROS'
 
     procedureRun = False
+    typeMap = {'bebop1':1, 'bebop2':1, None:None, 'pyBebop':2, 'tello':3, 'wand':4}
 
 
-    def  __init__(self, name:str, type:str, controller:Controller == None, callback, bounds = None):
+    def  __init__(self, name:str, type:str, controller:Controller == None, callback, bounds = None, ip = None):
         self.name = name
-        self.type = type
         self.controller = controller
         self.callbackFunc = callback
         self.rosTwist = Twist()
         self.bounds = bounds
+
+        if type in self.typeMap:
+            self.type = self.typeMap[type]
 
 
         if bounds != None and len(bounds) != self.controller.numPosAxis:
@@ -142,10 +149,10 @@ class Drone:
 
         #subscriber for the optitrack system
         if self.callback != None:
-            rospy.Subscriber(f'/mocap_node/{self.name}/Odom', Odometry, self.callback)
+            rospy.Subscriber(f'/mocap_node/{self.name}/Odom', Odometry, self.callback, queue_size=1)
 
         #create publishers for drone type
-        if (type == 'bebop1' or 'bebop2'):
+        if (self.type == self.typeMap['bebop1']):
             #vel publisher
             self.velPub = rospy.Publisher(f'/{self.name}/cmd_vel', Twist, queue_size=1)
             #landing publisher
@@ -161,9 +168,32 @@ class Drone:
                                                     [1, 0, 0]]
                                             )
 
+        if (self.type == self.typeMap['pyBebop']):
+            
+            self.ip = ip
 
-        elif (type == 'wand'):
+            if (ip == None):
+                print("'ip' parameter required for pyBebop type", file=sys.stderr)
+                sys.exit(1)
+
+            print("connecting")
+
+            self.droneObj = Bebop(ip_address=self.ip)
+
+            print(self.droneObj.connect(10))
+
+            self.droneObj.flat_trim(0)
+
+
+        elif (self.type == self.typeMap['tello']):
+            self.ip = ip
+            self.droneObj = Tello(host=self.ip)
+            self.droneObj.connect()
+
+
+        elif (self.type == self.typeMap['wand']):
             pass
+
         else:
             print(f"Unknown type '{type}' for class Drone", file=sys.stderr)
             sys.exit(1)
@@ -198,6 +228,9 @@ class Drone:
     # account for necessary rotations if desired
     def update_vel(self, pos:list, rotPosVels:bool = True, euler:bool = True, rotAxis:str = 'yaw', verbose = False, raw_vels = None):
         #vels order is [x, y, z, yaw, pitch, roll]
+        
+        temp = [0] * 4
+        
         if raw_vels != None:
             if (len(raw_vels) != (self.controller.numPosAxis + self.controller.numRotAxis)):
                 print("'raw_vels' parameter formatted incorrectly", file=sys.stderr)
@@ -231,53 +264,87 @@ class Drone:
                 print("Currently do not support non-euler values", file=sys.stderr)
                 sys.exit(1)
 
-            
-            self.rosTwist.linear.x = v_rot[0]
-            self.rosTwist.linear.y = v_rot[1]
-            self.rosTwist.linear.z = v_rot[2]
+            temp[0] = v_rot[0]
+            temp[1] = v_rot[1]
+            temp[2] = v_rot[2]
+            #self.rosTwist.linear.x = v_rot[0]
+            #self.rosTwist.linear.y = v_rot[1]
+            #self.rosTwist.linear.z = v_rot[2]
 
             
 
 
         else:
             if self.controller.numPosAxis == 3:
-                self.rosTwist.linear.x = vels[0]
-                self.rosTwist.linear.y = vels[1]
-                self.rosTwist.linear.z = vels[2]
+                temp[0] = vels[0]
+                temp[1] = vels[1]
+                temp[2] = vels[2]
+                #self.rosTwist.linear.x = vels[0]
+                #self.rosTwist.linear.y = vels[1]
+                #self.rosTwist.linear.z = vels[2]
             elif self.controller.numPosAxis == 2:
-                self.rosTwist.linear.x = vels[0]
-                self.rosTwist.linear.y = vels[1]
+                temp[0] = vels[0]
+                temp[1] = vels[1]
+                #self.rosTwist.linear.x = vels[0]
+                #self.rosTwist.linear.y = vels[1]
             else:
-                self.rosTwist.linear.x = vels[0]
+                temp[0] = vels[0]
+                #self.rosTwist.linear.x = vels[0]
 
 
 
         if self.controller.numRotAxis > 0:
-            self.rosTwist.angular.z = vels[self.controller.numPosAxis]
+            temp[3] = vels[self.controller.numPosAxis]
+            #self.rosTwist.angular.z = vels[self.controller.numPosAxis]
 
 
-        self.velPub.publish(self.rosTwist)
+        if (self.type == self.typeMap['bebop1']):
+            self.rosTwist.linear.x = temp[0]
+            self.rosTwist.linear.y = temp[1]
+            self.rosTwist.linear.z = temp[2]
+            self.rosTwist.angular.z = temp[3]
+            self.velPub.publish(self.rosTwist)
+
+        elif (self.type == self.typeMap['pyBebop']):
+            #self.droneObj.fly_direct(-self.rosTwist.linear.y*100, self.rosTwist.linear.x*100, self.rosTwist.angular.z*100, self.rosTwist.linear.z*100, 0.01)
+            self.droneObj.fly_direct(temp[0]*-100, temp[1]*100, temp[3]*100, temp[2]*100, 0.01)
+        elif (self.type == self.typeMap['tello']):
+            #print(type(self.rosTwist.linear.y))
+            #print(self.rosTwist.linear.y.shape)
+            #print(round(4.23))
+            #print(round(self.rosTwist.linear.y))
+            #print(round(self.rosTwist.linear.y*100))
+            #print(round(-(self.rosTwist.linear.y[0])*100)) 
+            #self.droneObj.send_rc_control(int(round(-(self.rosTwist.linear.y[0])*100)), round((self.rosTwist.linear.x[0])*100), round((self.rosTwist.linear.z[0])*100), round(self.rosTwist.angular.z*100))
+            self.droneObj.send_rc_control(int(round(temp[1][0])*-1), int(round(temp[0][0])), int(round(temp[2][0])), int(round(temp[3])*-1))
 
 
         if (verbose):
             print("---------------------")
-            print(f"x vel:::::::{self.rosTwist.linear.x}")
-            print(f"y vel:::::::{self.rosTwist.linear.y}")
-            print(f"z vel:::::::{self.rosTwist.linear.z}")
+            print(f"x vel:::::::{temp[0]}")
+            print(f"y vel:::::::{temp[1]}")
+            print(f"z vel:::::::{temp[2]}")
             
             if (self.controller.numRotAxis > 0):
-                print(f"yaw vel:::::{self.rosTwist.angular.z}")
+                print(f"yaw vel:::::{temp[3]}")
+
             
         
     def stop_movement(self):
-        stopTwist = Twist()
+        if (self.type == self.typeMap['bebop1']):
+            stopTwist = Twist()
 
-        stopTwist.linear.x = 0
-        stopTwist.linear.y = 0
-        stopTwist.linear.z = 0
-        stopTwist.angular.z = 0
+            stopTwist.linear.x = 0
+            stopTwist.linear.y = 0
+            stopTwist.linear.z = 0
+            stopTwist.angular.z = 0
 
-        self.velPub.publish(self.rosTwist)
+            self.velPub.publish(self.rosTwist)
+        elif (self.type == self.typeMap['pyBebop']):
+            self.droneObj.fly_direct(0, 0, 0, 0, 1)
+        elif (self.type == self.typeMap['tello']):
+            self.droneObj.send_rc_control(0, 0, 0, 0)
+
 
 
     #function to call given callback function which requires two parameters:
@@ -289,12 +356,28 @@ class Drone:
 
     #function to publish to the land topic for the drone
     def land(self):
-        self.landPub.publish(Empty())
+
+        if (self.type == self.typeMap['bebop1']):
+            self.landPub.publish(Empty())
+        elif (self.type == self.typeMap['pyBebop']):
+            self.droneObj.safe_land(10)
+        elif (self.type == self.typeMap['tello']):
+            self.droneObj.land()
+
+
+    def disconnect(self):
+        if (self.droneObj != None):
+            self.droneObj.disconnect()
 
 
     #function to publish to the takeoff topic for the drone
     def takeoff(self):
-        self.takeoffPub.publish(Empty())
+        if (self.type == self.typeMap['bebop1']):
+            self.takeoff.publish(Empty())
+        elif (self.type == self.typeMap['pyBebop']):
+            self.droneObj.safe_takeoff(8)
+        elif (self.type == self.typeMap['tello']):
+            self.droneObj.takeoff()
 
 
     #function to return if the drone is at the desired position.
