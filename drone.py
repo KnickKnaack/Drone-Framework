@@ -160,13 +160,22 @@ class Drone:
             #takeoff Publisher
             self.takeoffPub = rospy.Publisher(f'/{self.name}/takeoff', Empty, queue_size=5)
 
+
             if self.controller == None:
-                self.controller = Controller('PID', 3, 1, 
-                                                    [[0.35, 0.006, 0.4],
-    	                                            [0.35, 0.006, 0.4],
-                                                    [0.6, 0.003, 0.2],
-                                                    [1, 0, 0]]
-                                            )
+                if (self.type == self.typeMap['pyBebop'] or self.type == self.typeMap['bebop']):
+                    self.controller = Controller('PID', 3, 1, 
+                                                        [[0.35, 0.006, 0.4],
+                                                        [0.35, 0.006, 0.4],
+                                                        [0.6, 0.003, 0.2],
+                                                        [1, 0, 0]])
+                    
+                elif (self.type == self.typeMap['tello']):
+                    self.controller = Controller('PID', 3, 1, 
+                                                        [[70, 0.6, 40],
+    	                                                [70, 0.6, 40],
+                                                        [100, 0.6, 10],
+    	                                                [60, 0, 0]])
+                                            
 
         if (self.type == self.typeMap['pyBebop']):
             
@@ -316,6 +325,7 @@ class Drone:
             #print(round(self.rosTwist.linear.y*100))
             #print(round(-(self.rosTwist.linear.y[0])*100)) 
             #self.droneObj.send_rc_control(int(round(-(self.rosTwist.linear.y[0])*100)), round((self.rosTwist.linear.x[0])*100), round((self.rosTwist.linear.z[0])*100), round(self.rosTwist.angular.z*100))
+            print(temp[3])
             self.droneObj.send_rc_control(int(round(temp[1][0])*-1), int(round(temp[0][0])), int(round(temp[2][0])), int(round(temp[3])*-1))
 
 
