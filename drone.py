@@ -171,8 +171,8 @@ class Drone:
                     
                 elif (self.type == self.typeMap['tello']):
                     self.controller = Controller('PID', 3, 1, 
-                                                        [[70, 0.6, 40],
-    	                                                [70, 0.6, 40],
+                                                        [[105, 0.6, 40],
+    	                                                [105, 0.6, 40],
                                                         [100, 0.6, 10],
     	                                                [60, 0, 0]])
                                             
