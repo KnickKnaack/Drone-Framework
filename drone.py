@@ -3,7 +3,9 @@ import math
 
 from pyparrot.Bebop import Bebop
 
-from djitellopy import Tello
+from djitellopy import Tello, TelloSwarm
+
+import threading
 
 import rospy
 from nav_msgs.msg import Odometry
@@ -130,7 +132,8 @@ class Drone:
 
     procedureRun = False
     typeMap = {'bebop1':1, 'bebop2':1, None:None, 'pyBebop':2, 'tello':3, 'wand':4}
-
+    telloSwarm = None
+    myTellos = []
 
     def  __init__(self, name:str, type:str, controller:Controller == None, callback, bounds = None, ip = None):
         self.name = name
@@ -151,6 +154,22 @@ class Drone:
         if self.callback != None:
             rospy.Subscriber(f'/mocap_node/{self.name}/Odom', Odometry, self.callback, queue_size=1)
 
+
+        if self.controller == None:
+            if (self.type == self.typeMap['pyBebop'] or self.type == self.typeMap['bebop1'] or self.type == self.typeMap['bebop2']):
+                self.controller = Controller('PID', 3, 1, 
+                                                    [[0.35, 0.006, 0.4],
+                                                    [0.35, 0.006, 0.4],
+                                                    [0.6, 0.003, 0.2],
+                                                    [1, 0, 0]])
+                
+            elif (self.type == self.typeMap['tello']):
+                self.controller = Controller('PID', 3, 1, 
+                                                    [[105, 0.6, 40],
+                                                    [105, 0.6, 40],
+                                                    [100, 0.6, 10],
+                                                    [60, 0, 0]])
+
         #create publishers for drone type
         if (self.type == self.typeMap['bebop1']):
             #vel publisher
@@ -159,22 +178,6 @@ class Drone:
             self.landPub = rospy.Publisher(f'/{self.name}/land', Empty, queue_size=5)
             #takeoff Publisher
             self.takeoffPub = rospy.Publisher(f'/{self.name}/takeoff', Empty, queue_size=5)
-
-
-            if self.controller == None:
-                if (self.type == self.typeMap['pyBebop'] or self.type == self.typeMap['bebop']):
-                    self.controller = Controller('PID', 3, 1, 
-                                                        [[0.35, 0.006, 0.4],
-                                                        [0.35, 0.006, 0.4],
-                                                        [0.6, 0.003, 0.2],
-                                                        [1, 0, 0]])
-                    
-                elif (self.type == self.typeMap['tello']):
-                    self.controller = Controller('PID', 3, 1, 
-                                                        [[105, 0.6, 40],
-    	                                                [105, 0.6, 40],
-                                                        [100, 0.6, 10],
-    	                                                [60, 0, 0]])
                                             
 
         if (self.type == self.typeMap['pyBebop']):
@@ -198,6 +201,8 @@ class Drone:
             self.ip = ip
             self.droneObj = Tello(host=self.ip)
             self.droneObj.connect()
+
+            Drone.myTellos.append(self.droneObj)
 
 
         elif (self.type == self.typeMap['wand']):
@@ -365,7 +370,7 @@ class Drone:
 
 
     #function to publish to the land topic for the drone
-    def land(self):
+    def land(self, safe=True):
 
         if (self.type == self.typeMap['bebop1']):
             self.landPub.publish(Empty())
@@ -376,8 +381,10 @@ class Drone:
 
 
     def disconnect(self):
-        if (self.droneObj != None):
+        if (self.type == self.typeMap['pyBebop']):
             self.droneObj.disconnect()
+        elif (self.type == self.typeMap['tello']):
+            self.droneObj.end()
 
 
     #function to publish to the takeoff topic for the drone
@@ -407,7 +414,11 @@ class Drone:
 
     def takeoff_drones(drones:list):
         for d in drones:
-            d.takeoff()
+            if d.type != Drone.typeMap['tello']:
+                d.takeoff()
+
+        if Drone.telloSwarm != None:
+            Drone.telloSwarm.takeoff()
 
 
     def stop_and_land_drones(drones:list):
@@ -415,7 +426,14 @@ class Drone:
             d.stop_movement()
 
         for d in drones:
-            d.land()
+            if d.type != Drone.typeMap['tello']:
+                d.land()
+                
+        if Drone.telloSwarm != None:
+            Drone.telloSwarm.land()
+
+    def create_tello_swarm():
+        Drone.telloSwarm = TelloSwarm(Drone.myTellos)
 
 
 

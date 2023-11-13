@@ -30,6 +30,9 @@ mPos = [0, 0, 0, 0]
 
 rospy.init_node('myNode', anonymous=True)
 
+mPos = [0, 0]
+
+nameMap = {'tello_01':1, 'tello_02':2}
 
 def opti_callback(msg, drone, procedureRun):
     global mPos
@@ -42,14 +45,19 @@ def opti_callback(msg, drone, procedureRun):
     if (yaw_rad < -(math.pi)):
         yaw_rad += (2 * math.pi)
     
-    mPos = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, yaw_rad]
 
-    if Drone.procedureRun:
-        drone.update_vel(mPos, rotPosVels=True)
+    if (nameMap[drone.name] == 1):
+        mPos[0] = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, yaw_rad]
+    else:
+        mPos[1] = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z, yaw_rad]
+
+    #if Drone.procedureRun:
+    #    drone.update_vel(mPos, rotPosVels=True)
 
 
+myDrones = [Drone('tello_01', 'tello', None, opti_callback, ip = '192.168.1.141'), Drone('tello_02', 'tello', None, opti_callback, ip = '192.168.10.1')]
 
-myDrone = Drone('bebop_03', 'bebop1', None, opti_callback)
+
 
 
 def angle_to_point(pos, point, hasZ = False, outDeg = True):
@@ -77,20 +85,20 @@ def emergency_stop():
     input('hit enter to stop')
 
     Drone.procedureRun = False
-    myDrone.stop_movement
-    myDrone.land
+    Drone.stop_and_land_drones(myDrones)
 
     print('emergency stopped')
     exit(1)
 
 
 def main():
-    global myDrone, debug
+    global myDrones, debug
 
     debug = False
 
     time.sleep(2)    
 
+    Drone.create_tello_swarm()
 
 
     myIn = input("'t' to takeoff: ")
@@ -101,7 +109,7 @@ def main():
         exit(1)
 
 
-    myDrone.takeoff()
+    Drone.takeoff_drones(myDrones)
     print('takeoff')
 
     time.sleep(1)
@@ -113,8 +121,7 @@ def main():
 
 
     if (myIn != 's'):
-        myDrone.stop_movement()
-        myDrone.land()
+        Drone.stop_and_land_drones(myDrones)
         print(f"invalid input '{myIn}'")
         print('landing and exiting...')
         exit(1)
@@ -127,7 +134,8 @@ def main():
     radius = 0.75
     yOffset = 0
     sPerRot = 15
-    myDrone.set_controller_points([radius, yOffset, 1, angle_to_point([radius,yOffset], [0, yOffset])], reset=True)
+    myDrones[0].set_controller_points([radius, yOffset, 1, angle_to_point([radius,yOffset], [0, yOffset])], reset=True)
+    myDrones[1].set_controller_points([-radius, yOffset, 1, angle_to_point([radius+math.pi,yOffset], [0, yOffset])], reset=True)
     Drone.procedureRun = True
     
     
@@ -144,23 +152,37 @@ def main():
 
     cirCent = [0, yOffset]
 
+    freq = 0.05
+
 
     while (rads < math.pi * 4 and Drone.procedureRun):
-        currTime = time.time()
+        startT = time.time()
+        currTime = startT
 
         diff = currTime - lastTime
 
         rads += diff * (math.pi*2)/sPerRot
 
-        x, y = genCircle(rads, radius, yOffset)
+        x1, y1 = genCircle(rads, radius, yOffset)
+        x2, y2 = genCircle(rads+math.pi, radius, yOffset)
         #print(x, y)
 
-        myDrone.set_controller_points([x, y, 1, angle_to_point(mPos, cirCent)], reset=False)
+        myDrones[0].set_controller_points([x1, y1, 1, angle_to_point(mPos[0], cirCent)], reset=False)
+        myDrones[1].set_controller_points([x2, y2, 1, angle_to_point(mPos[1], cirCent)], reset=False)
+
+        myDrones[0].update_vel(mPos[0], rotPosVels=True)
+        myDrones[1].update_vel(mPos[1], rotPosVels=True)
 
         lastTime = currTime
+
+        while (time.time() - startT <= freq):
+            time.sleep(0.0005)
+            pass
+
         
 
-    myDrone.set_controller_points([radius, yOffset, 1, angle_to_point([radius,yOffset], [0, yOffset])], reset=True)
+    myDrones[0].set_controller_points([radius, yOffset, 1, angle_to_point([radius,yOffset], [0, yOffset])], reset=True)
+    myDrones[1].set_controller_points([-radius, yOffset, 1, angle_to_point([radius+math.pi,yOffset], [0, yOffset])], reset=True)
 
     time.sleep(2)
 
@@ -171,9 +193,7 @@ def main():
 
 
     print('procedure finished')
-    myDrone.stop_movement()
-    time.sleep(1)
-    myDrone.land()
+    Drone.stop_and_land_drones(myDrones)
     #time.sleep(2)
 
     print('landing')
