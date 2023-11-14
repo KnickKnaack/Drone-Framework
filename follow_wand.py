@@ -94,14 +94,20 @@ def main():
 
 
     contParams = [
-    	[0.35, 0.006, 0.4],
-    	[0.35, 0.006, 0.4],
+    	[1.2, 0.006, 0.35],
+    	[1.2, 0.006, 0.35],
         [0.6, 0.006, 0.4],
     	[1.3, 0, 0]
     ]
 
-        
-    myDrone = Drone('bebop_03', 'bebop1', Controller('PID', 3, 1, contParams), drone_callback, bounds=[(-1.0, 1.0),(-1.5, 1.9),(0.8, 2.0)])
+    contParams = [
+    	[105, 0.6, 40],
+    	[105, 0.6, 40],
+        [100, 0.6, 10],
+    	[60, 0, 0]
+    ]
+
+    myDrone = Drone('tello_01', 'tello', Controller('PID', 3, 1, contParams), drone_callback, ip='192.168.1.141', bounds=[(-1.0, 1.0),(-1.5, 1.9),(0.8, 2.0)])
     Drone('wand_01', 'wand', None, wand_callback)
     
     
